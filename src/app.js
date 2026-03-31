@@ -14,6 +14,8 @@ import firebaseRoutes from './module/Leads/firebase.route.js';
 import annualReportRoutes from "./module/AnnualReport/annualReport.route.js";
 import hoursReportRoutes from "./module/HoursReport/hoursreport.route.js";
 import stateRouter from "./module/State/state.route.js";
+import AssignRoutes from "./module/Assign/assign.route.js";
+
 dotenv.config();
 const app = express();
 
@@ -50,7 +52,8 @@ app.use("/api/v1/annualreport", annualReportRoutes);
 app.use("/api/v1/hoursreport", hoursReportRoutes);
 app.use("/api/v1/customer", customerRouter);
 app.use("/api/v1/state", stateRouter);
-
+app.use("/api/v1/state", stateRouter);
+app.use("/api/v1/assign", AssignRoutes);
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Server is running',
