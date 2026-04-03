@@ -6,14 +6,15 @@ import {
   findUserByEmail,
   insertUser,
   saveRefreshToken,
-  getSalesUsers ,
+  getSalesUsers,
+  updateUserById,
 } from "./user.model.js";
 import { generateTokens, isPasswordCorrect } from "./user.service.js";
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, city, role } = req.body;
-
-  if (!name || !email || !password || !city || !role) {
+  const { name, email, password, city, role, subDepartment_name } = req.body;
+  console.log("Register User Request Body:", req.body);
+  if (!name || !email || !password || !city || !role || !subDepartment_name) {
     throw new ApiError(400, "All fields are required");
   }
 
@@ -27,7 +28,14 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(409, "User already exists");
   }
 
-  const newUser = await insertUser({ name, email, password, city, role });
+  const newUser = await insertUser({
+    name,
+    email,
+    password,
+    city,
+    role,
+    subDepartment_name,
+  });
 
   if (!newUser) {
     throw new ApiError(500, "User creation failed");
@@ -93,7 +101,7 @@ const getCurrentUSer = asyncHandler(async (req, res) => {
   if (!currentUser) {
     throw new ApiError(404, "Current user not found");
   }
-
+  console.log("Current Usersss:", currentUser);
   res
     .status(200)
     .json(new ApiResponse(200, currentUser, " current user get successfully"));
@@ -116,3 +124,44 @@ export const getSalesUsersController = async (req, res) => {
     });
   }
 };
+
+export const updateUserController = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { name, email, password, city, role, subDepartment_name } = req.body;
+
+  if (!id) {
+    throw new ApiError(400, "User id is required");
+  }
+
+  const existingUser = await findUserById(id);
+
+  if (!existingUser) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // email duplicate check
+  if (email && email !== existingUser.email) {
+    const emailExists = await findUserByEmail(email);
+
+    if (emailExists) {
+      throw new ApiError(409, "Email already exists");
+    }
+  }
+
+  const updatedUser = await updateUserById(id, {
+    name,
+    email,
+    password,
+    city,
+    subDepartment_name,
+    role,
+  });
+
+  if (!updatedUser) {
+    throw new ApiError(500, "User update failed");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedUser, "User updated successfully"));
+});
