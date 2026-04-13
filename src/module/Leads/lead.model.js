@@ -7,9 +7,12 @@ const safe = (value) => (value === undefined ? null : value);
 export const LEAD_COLUMNS = {
   ID: "id",
   UUID: "uuid",
+  CUSTOMER_ID: "customer_id", // ✅ ADDED
   DATE: "date",
   ENQUIRY_TIME: "enquiryTime",
-  NAME: "customerName",
+  FIRST_NAME: "firstName",
+  MIDDLE_NAME: "middleName",
+  LAST_NAME: "lastName",
   PHONE: "customerPhone",
   EMAIL: "customerEmail",
   COMPANY_NAME: "companyName",
@@ -59,17 +62,13 @@ export const LEAD_COLUMNS = {
 export const insertLead = async (data) => {
   try {
     const {
+      customer_id,
       date,
       enquiryTime,
-      customerName,
-      customerPhone,
-      customerEmail,
-      companyName,
+
       source,
       telecaller,
       status,
-      customerType,
-      customerCategoryType,
       serviceType,
       vehicle2,
       vehicles,
@@ -97,10 +96,7 @@ export const insertLead = async (data) => {
       dropcity,
       pickupcity,
       lost_reason,
-      alternatePhone,
-      countryName,
       city,
-      customerCity,
       vehicle1Quantity,
       vehicle2Quantity,
       vehicle3Quantity,
@@ -116,17 +112,12 @@ export const insertLead = async (data) => {
 
     const values = [
       leadUuid,
+      int(customer_id),
       safe(date),
       safe(enquiryTime),
-      safe(customerName),
-      safe(customerPhone),
-      safe(customerEmail),
-      safe(companyName),
       safe(source),
       safe(telecaller),
       safe(status),
-      safe(customerType),
-      safe(customerCategoryType),
       safe(serviceType),
       safe(vehicle2),
       safe(vehicles),
@@ -135,38 +126,26 @@ export const insertLead = async (data) => {
       safe(occasion),
       safe(pickupDateTime),
       safe(dropDateTime),
-
       int(days),
-
       safe(pickupAddress),
       safe(dropAddress),
-
       int(passengerTotal),
       int(petsNumber),
-
       safe(petsNames),
-
       int(km),
-
       int(smallBaggage),
       int(mediumBaggage),
       int(largeBaggage),
       int(airportBaggage),
       int(totalBaggage),
-
       itinerary && Array.isArray(itinerary) ? JSON.stringify(itinerary) : null,
-
       safe(tripType),
       safe(remarks),
       safe(message),
       safe(dropcity),
       safe(pickupcity),
       safe(lost_reason),
-      safe(alternatePhone),
-      safe(countryName),
       safe(city),
-      safe(customerCity),
-
       int(vehicle1Quantity),
       int(vehicle2Quantity),
       int(vehicle3Quantity),
@@ -175,17 +154,12 @@ export const insertLead = async (data) => {
     const sql = `
       INSERT INTO ${LEAD_TABLE} (
         ${LEAD_COLUMNS.UUID},
+        ${LEAD_COLUMNS.CUSTOMER_ID},
         ${LEAD_COLUMNS.DATE},
         ${LEAD_COLUMNS.ENQUIRY_TIME},
-        ${LEAD_COLUMNS.NAME},
-        ${LEAD_COLUMNS.PHONE},
-        ${LEAD_COLUMNS.EMAIL},
-        ${LEAD_COLUMNS.COMPANY_NAME},
         ${LEAD_COLUMNS.SOURCE},
         ${LEAD_COLUMNS.TELESALES},
         ${LEAD_COLUMNS.STATUS},
-        ${LEAD_COLUMNS.CUSTOMER_TYPE},
-        ${LEAD_COLUMNS.CUSTOMER_CATEGORY_TYPE},
         ${LEAD_COLUMNS.SERVICE_TYPE},
         ${LEAD_COLUMNS.VEHICLE_vehicle2},
         ${LEAD_COLUMNS.VEHICLE_TYPE},
@@ -213,10 +187,7 @@ export const insertLead = async (data) => {
         ${LEAD_COLUMNS.DROP_CITY},
         ${LEAD_COLUMNS.PICKUP_CITY},
         ${LEAD_COLUMNS.LOST_REASON},
-        ${LEAD_COLUMNS.ALTERNATE_PHONE},
-        ${LEAD_COLUMNS.COUNTRY_NAME},
         ${LEAD_COLUMNS.CITY},
-        ${LEAD_COLUMNS.CUSTOMER_CITY},
         ${LEAD_COLUMNS.VEHICLE1QUANTITY},
         ${LEAD_COLUMNS.VEHICLE2QUANTITY},
         ${LEAD_COLUMNS.VEHICLE3QUANTITY}
@@ -227,9 +198,10 @@ export const insertLead = async (data) => {
     const [result] = await pool.execute(sql, values);
 
     return {
+      success: true,
       id: result.insertId,
       uuid: leadUuid,
-      customerName,
+      customer_id,
       status,
       serviceType,
     };
@@ -239,6 +211,95 @@ export const insertLead = async (data) => {
   }
 };
 
+export const createCustomers = async (data) => {
+  try {
+    // Dynamic duplicate check
+    let checkSql = `
+      SELECT id, uuid, customerPhone, customerEmail
+      FROM customers
+      WHERE customerPhone = ?
+    `;
+    const params = [data.customerPhone];
+    if (data.customerEmail) {
+      checkSql += ` OR customerEmail = ?`;
+      params.push(data.customerEmail);
+    }
+    checkSql += ` LIMIT 1`;
+
+    const [existing] = await pool.execute(checkSql, params);
+
+    // If customer already exists
+    if (existing.length > 0) {
+      return {
+        success: true,
+        isExisting: true,
+        message: "Customer already exists",
+        customerId: existing[0].id,
+        uuid: existing[0].uuid,
+        existingCustomer: existing[0],
+      };
+    }
+
+    // Create new customer
+    const customerUuid = generateUUID();
+    const insertSql = `
+      INSERT INTO customers (
+        uuid,
+        firstName,
+        middleName,
+        lastName,
+        customerPhone,
+        customerEmail,
+        companyName,
+        customerType,
+        customerCategoryType,
+        alternatePhone,
+        countryName,
+        customerCity,
+        address,
+        date_of_birth,
+        anniversary,
+        gender,
+        state,
+        pincode
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const values = [
+      customerUuid,
+      data.firstName || null,
+      data.middleName || null,
+      data.lastName || null,
+      data.customerPhone || null,
+      data.customerEmail || null,
+      data.companyName || null,
+      data.customerType || null,
+      data.customerCategoryType || null,
+      data.alternatePhone || null,
+      data.countryName || null,
+      data.customerCity || null,
+      data.address || null,
+      data.date_of_birth || null,
+      data.anniversary || null,
+      data.gender || null,
+      data.state || null,
+      data.pincode || null,
+    ];
+
+    const [result] = await pool.execute(insertSql, values);
+
+    return {
+      success: true,
+      isExisting: false,
+      message: "Customer created successfully",
+      customerId: result.insertId,
+      uuid: customerUuid,
+    };
+  } catch (error) {
+    console.error("Create Customer Error:", error);
+    throw error;
+  }
+};
 export const findLeadByUUID = async (uuid) => {
   try {
     const [rows] = await pool.execute(
@@ -252,41 +313,6 @@ export const findLeadByUUID = async (uuid) => {
     throw error;
   }
 };
-
-// export const getLeads = async (page = 1, limit = 15) => {
-//   try {
-//     const pageNumber = parseInt(page, 10);
-//     const limitNumber = parseInt(limit, 10);
-
-//     if (isNaN(pageNumber) || pageNumber < 1) {
-//       throw new Error("Invalid page number");
-//     }
-//     if (isNaN(limitNumber) || limitNumber < 1) {
-//       throw new Error("Invalid limit number");
-//     }
-
-//     const offset = (pageNumber - 1) * limitNumber;
-
-//     const [rows] = await pool.execute(
-//       `SELECT * FROM ${LEAD_TABLE} ORDER BY ${LEAD_COLUMNS.CREATED_AT} DESC LIMIT ${limitNumber} OFFSET ${offset}`,
-//     );
-
-//     const [totalRows] = await pool.execute(
-//       `SELECT COUNT(*) as count FROM ${LEAD_TABLE}`,
-//     );
-//     const total = totalRows[0].count;
-
-//     return {
-//       leads: rows,
-//       total,
-//       page: pageNumber,
-//       totalPages: Math.ceil(total / limitNumber),
-//     };
-//   } catch (error) {
-//     console.error("getLeads error:", error);
-//     throw error;
-//   }
-// };
 
 export const getLeads = async (page = 1, limit = 15) => {
   try {
@@ -302,21 +328,48 @@ export const getLeads = async (page = 1, limit = 15) => {
 
     const offset = (pageNumber - 1) * limitNumber;
 
-    // ✅ NULL or not unwanted
     const [rows] = await pool.execute(
-      `SELECT *
-       FROM leads
-       WHERE unwanted_status IS NULL 
-          OR unwanted_status != 'unwanted'
-       ORDER BY created_at DESC
+      `SELECT 
+        l.*,
+
+        c.uuid AS customer_uuid,
+
+        -- ✅ Full Name
+        CONCAT_WS(' ', c.firstName, c.middleName, c.lastName) AS fullName,
+
+        c.firstName,
+        c.middleName,
+        c.lastName,
+
+        c.customerPhone,
+        c.customerEmail,
+        c.companyName,
+        c.customerType,
+        c.customerCategoryType,
+        c.alternatePhone,
+        c.countryName,
+        c.customerCity,
+        c.address,
+        c.date_of_birth,
+        c.anniversary,
+        c.gender,
+        c.state,
+        c.pincode
+
+       FROM leads l
+       LEFT JOIN customers c ON l.customer_id = c.id
+       WHERE l.unwanted_status IS NULL 
+          OR l.unwanted_status != 'unwanted'
+       ORDER BY l.created_at DESC
        LIMIT ${limitNumber} OFFSET ${offset}`,
     );
 
     const [totalRows] = await pool.execute(
       `SELECT COUNT(*) as count
-       FROM leads
-       WHERE unwanted_status IS NULL 
-          OR unwanted_status != 'unwanted'`,
+       FROM leads l
+       LEFT JOIN customers c ON l.customer_id = c.id
+       WHERE l.unwanted_status IS NULL 
+          OR l.unwanted_status != 'unwanted'`,
     );
 
     const total = totalRows[0].count;
@@ -421,11 +474,31 @@ export const updateLeadUnwantedStatus = async (leadId, status) => {
 
 export const getAllUnwantedLeadsModel = async () => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT * FROM ${LEAD_TABLE} 
-       WHERE unwanted_status = 'unwanted'
-       ORDER BY ${LEAD_COLUMNS.UPDATED_AT} DESC`,
-    );
+    const [rows] = await pool.execute(`
+      SELECT 
+        l.id AS leadId,
+        l.unwanted_status,
+        l.updated_at,
+
+        c.id AS customerId,
+
+        -- ✅ Full Name add kiya
+        TRIM(CONCAT_WS(' ', c.firstName, c.middleName, c.lastName)) AS fullName,
+
+        c.firstName,
+        c.middleName,
+        c.lastName,
+
+        c.customerPhone,
+        c.customerCity
+
+      FROM leads l
+      LEFT JOIN customers c 
+        ON l.customer_id = c.id
+
+      WHERE l.unwanted_status = 'unwanted'
+      ORDER BY l.updated_at DESC
+    `);
 
     console.log(`Found ${rows.length} unwanted leads`);
     return rows;

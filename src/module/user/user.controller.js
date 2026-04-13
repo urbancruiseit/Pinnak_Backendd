@@ -48,7 +48,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
+  console.log(email, password);
   if (!email || !password) {
     throw new ApiError(400, "Email and password are required");
   }
@@ -101,7 +101,6 @@ const getCurrentUSer = asyncHandler(async (req, res) => {
   if (!currentUser) {
     throw new ApiError(404, "Current user not found");
   }
-  console.log("Current Usersss:", currentUser);
   res
     .status(200)
     .json(new ApiResponse(200, currentUser, " current user get successfully"));
