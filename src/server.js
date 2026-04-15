@@ -1,9 +1,10 @@
 import { app } from "./app.js";
-import { connectMySQL } from "./config/mySqlDB.js";
+import { connectHRMSMySQL, connectMySQL } from "./config/mySqlDB.js";
 import { admin } from "./config/firebase.js";
 
 const PORT = process.env.PORT || 5000;
 connectMySQL();
+connectHRMSMySQL();
 
 // Check Firebase connection
 if (admin.apps.length) {
