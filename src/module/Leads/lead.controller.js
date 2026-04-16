@@ -33,6 +33,7 @@ import {
 
 const createLeads = asyncHandler(async (req, res) => {
   const data = req.body;
+  console.log(data);
   const city = data.city || "Unknown";
   console.log("Lead creation data:", data);
 
