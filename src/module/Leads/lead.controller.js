@@ -117,15 +117,14 @@ const createLeads = asyncHandler(async (req, res) => {
 });
 
 const listLeads = asyncHandler(async (req, res) => {
+  const user = req.user;
+  const userCityIds = user.city_ids || [];
+
   const page = parseInt(req.query.page) || 1;
   const limit = 14;
 
-  const leadsData = await getLeads(page, limit);
-
-  if (!leadsData || leadsData.leads.length === 0) {
-    throw new ApiError(404, "Lead data not found");
-  }
-
+  const leadsData = await getLeads(page, limit, userCityIds);
+  console.log(leadsData);
   res
     .status(200)
     .json(new ApiResponse(200, leadsData, "Leads fetched successfully"));

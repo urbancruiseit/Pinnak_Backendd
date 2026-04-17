@@ -1,6 +1,7 @@
 import { app } from "./app.js";
 import { connectHRMSMySQL, connectMySQL } from "./config/mySqlDB.js";
 import { admin } from "./config/firebase.js";
+// import { initSocket } from "./socket/socket.js";
 
 const PORT = process.env.PORT || 5000;
 connectMySQL();
@@ -12,6 +13,11 @@ if (admin.apps.length) {
 } else {
   console.log("⚠️ Firebase not connected");
 }
+
+// const server = http.createServer(app);
+
+// // Initialize socket
+// initSocket(server);
 
 // app.listen(PORT, () => {
 //   console.log(`✅ Server running on port ${PORT}`);

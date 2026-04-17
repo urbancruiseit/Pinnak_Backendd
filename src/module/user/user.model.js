@@ -1,4 +1,4 @@
-import { pool } from "../../config/mySqlDB.js";
+import { hrmsPool, pool } from "../../config/mySqlDB.js";
 import bcrypt from "bcrypt";
 import { generateUUID } from "../../utils/uuid.js";
 
@@ -102,16 +102,128 @@ export const findUserByUUID = async (uuid) => {
 };
 
 // FIND USER BY ID
+// export const findUserById = async (id) => {
+//   if (id == null) throw new Error("User ID is required");
+
+//   try {
+//     const [rows] = await pool.execute(
+//       `SELECT * FROM ${USER_TABLE} WHERE ${USER_COLUMNS.ID} = ?`,
+//       [id],
+//     );
+
+//     return rows[0] || null;
+//   } catch (error) {
+//     console.error("findUserById error:", error);
+//     throw error;
+//   }
+// };
+
 export const findUserById = async (id) => {
-  if (id == null) throw new Error("User ID is required");
+  if (!id) throw new Error("User ID is required");
 
   try {
-    const [rows] = await pool.execute(
-      `SELECT * FROM ${USER_TABLE} WHERE ${USER_COLUMNS.ID} = ?`,
+    const [rows] = await hrmsPool.execute(
+      `
+      SELECT 
+        u.*, 
+        r.role_name,
+        h.ho_name,
+        d.department_name,
+        des.subDepartment_name
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN hos h ON u.ho_id = h.id
+      LEFT JOIN sub_department des ON u.subDepartment_id = des.id
+      WHERE u.id = ?
+      `,
       [id],
     );
 
-    return rows[0] || null;
+    const user = rows[0];
+    if (!user) return null;
+
+    // Get access control data (regions, zones, cities)
+    let accessData = {
+      region_ids: [],
+      region_names: [],
+      zone_ids: [],
+      zone_names: [],
+      city_ids: [],
+      city_names: [],
+    };
+
+    try {
+      const [acRows] = await hrmsPool.execute(
+        `SELECT ac.id, ac.subdepartment_id, sd.subDepartment_name
+         FROM access_control ac
+         LEFT JOIN sub_department sd ON ac.subdepartment_id = sd.id
+         WHERE ac.employee_id = ?`,
+        [id],
+      );
+
+      if (acRows.length > 0) {
+        const acId = acRows[0].id;
+
+        // Get regions
+        const [regionRows] = await hrmsPool.execute(
+          `SELECT r.id, r.region_name 
+           FROM access_control_regions acr
+           JOIN regions r ON acr.region_id = r.id
+           WHERE acr.access_control_id = ?`,
+          [acId],
+        );
+        accessData.region_ids = regionRows.map((r) => r.id);
+        accessData.region_names = regionRows.map((r) => r.region_name);
+
+        // Get zones
+        const [zoneRows] = await hrmsPool.execute(
+          `SELECT z.id, z.zone_name 
+           FROM access_control_zones acz
+           JOIN zones z ON acz.zone_id = z.id
+           WHERE acz.access_control_id = ?`,
+          [acId],
+        );
+        accessData.zone_ids = zoneRows.map((z) => z.id);
+        accessData.zone_names = zoneRows.map((z) => z.zone_name);
+
+        // Get cities
+        const [cityRows] = await hrmsPool.execute(
+          `SELECT c.id, c.city_name 
+           FROM access_control_cities acc
+           JOIN city c ON acc.city_id = c.id
+           WHERE acc.access_control_id = ?`,
+          [acId],
+        );
+        accessData.city_ids = cityRows.map((c) => c.id);
+        accessData.city_names = cityRows.map((c) => c.city_name);
+      }
+    } catch (acError) {
+      console.error("Error fetching access control data:", acError);
+    }
+
+    return {
+      ...user, // ✅ saare columns aa jayenge
+
+      // extra mapped fields (clean naming ke liye)
+      role: user.role_name || null,
+      department: user.department_name || null,
+      subDepartment: user.subDepartment_name || null,
+
+      fullName: [user.firstName, user.middleName, user.lastName]
+        .filter(Boolean)
+        .join(" "),
+
+      isActive: Boolean(user.is_active),
+
+      // Access control data
+      region_ids: accessData.region_ids,
+      region_names: accessData.region_names,
+      zone_ids: accessData.zone_ids,
+      zone_names: accessData.zone_names,
+      city_ids: accessData.city_ids,
+      city_names: accessData.city_names,
+    };
   } catch (error) {
     console.error("findUserById error:", error);
     throw error;

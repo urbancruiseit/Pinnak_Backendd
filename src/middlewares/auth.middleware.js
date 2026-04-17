@@ -10,7 +10,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
   } else if (req.cookies?.accessToken) {
     token = req.cookies.accessToken;
   }
-  console.log(token);
+
   if (!token)
     return res.status(401).json({ message: "Authorization token missing" });
 
@@ -18,7 +18,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
     const user = await findUserById(decoded.id);
-
+    console.log("user--------------", user);
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }

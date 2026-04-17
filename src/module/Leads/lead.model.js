@@ -51,6 +51,7 @@ export const LEAD_COLUMNS = {
   ALTERNATE_PHONE: "alternatePhone",
   COUNTRY_NAME: "countryName",
   CITY_ID: "city_id",
+  CITY: "city",
   CUSTOMER_CITY: "customerCity",
   VEHICLE1QUANTITY: "vehicle1Quantity",
   VEHICLE2QUANTITY: "vehicle2Quantity",
@@ -97,6 +98,7 @@ export const insertLead = async (data) => {
       pickupcity,
       lost_reason,
       city_id,
+      city,
       vehicle1Quantity,
       vehicle2Quantity,
       vehicle3Quantity,
@@ -146,6 +148,7 @@ export const insertLead = async (data) => {
       safe(pickupcity),
       safe(lost_reason),
       safe(city_id),
+      safe(city),
       int(vehicle1Quantity),
       int(vehicle2Quantity),
       int(vehicle3Quantity),
@@ -188,6 +191,7 @@ export const insertLead = async (data) => {
         ${LEAD_COLUMNS.PICKUP_CITY},
         ${LEAD_COLUMNS.LOST_REASON},
         ${LEAD_COLUMNS.CITY_ID},
+         ${LEAD_COLUMNS.CITY},
         ${LEAD_COLUMNS.VEHICLE1QUANTITY},
         ${LEAD_COLUMNS.VEHICLE2QUANTITY},
         ${LEAD_COLUMNS.VEHICLE3QUANTITY}
@@ -314,77 +318,145 @@ export const findLeadByUUID = async (uuid) => {
   }
 };
 
-export const getLeads = async (page = 1, limit = 15) => {
-  try {
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
+export const getLeads = async (page, limit, cityIds) => {
+  const pageNumber = parseInt(page, 10);
+  const limitNumber = parseInt(limit, 10);
+  const offset = (pageNumber - 1) * limitNumber;
 
-    if (isNaN(pageNumber) || pageNumber < 1) {
-      throw new Error("Invalid page number");
-    }
-    if (isNaN(limitNumber) || limitNumber < 1) {
-      throw new Error("Invalid limit number");
-    }
+  // City filter clause
+  let whereClause = `WHERE (l.unwanted_status IS NULL OR l.unwanted_status != 'unwanted')`;
+  let cityValues = [];
 
-    const offset = (pageNumber - 1) * limitNumber;
-
-    const [rows] = await pool.execute(
-      `SELECT 
-        l.*,
-
-        c.uuid AS customer_uuid,
-
-        -- ✅ Full Name
-        CONCAT_WS(' ', c.firstName, c.middleName, c.lastName) AS fullName,
-
-        c.firstName,
-        c.middleName,
-        c.lastName,
-
-        c.customerPhone,
-        c.customerEmail,
-        c.companyName,
-        c.customerType,
-        c.customerCategoryType,
-        c.alternatePhone,
-        c.countryName,
-        c.customerCity,
-        c.address,
-        c.date_of_birth,
-        c.anniversary,
-        c.gender,
-        c.state,
-        c.pincode
-
-       FROM leads l
-       LEFT JOIN customers c ON l.customer_id = c.id
-       WHERE l.unwanted_status IS NULL 
-          OR l.unwanted_status != 'unwanted'
-       ORDER BY l.created_at DESC
-       LIMIT ${limitNumber} OFFSET ${offset}`,
-    );
-
-    const [totalRows] = await pool.execute(
-      `SELECT COUNT(*) as count
-       FROM leads l
-       LEFT JOIN customers c ON l.customer_id = c.id
-       WHERE l.unwanted_status IS NULL 
-          OR l.unwanted_status != 'unwanted'`,
-    );
-
-    const total = totalRows[0].count;
-
-    return {
-      leads: rows,
-      total,
-      page: pageNumber,
-      totalPages: Math.ceil(total / limitNumber),
-    };
-  } catch (error) {
-    console.error("getLeads error:", error);
-    throw error;
+  if (cityIds && cityIds.length > 0) {
+    const placeholders = cityIds.map(() => "?").join(",");
+    whereClause += ` AND l.city_id IN (${placeholders})`;
+    cityValues = [...cityIds];
   }
+
+  // Main query with customer JOIN
+  const query = `
+    SELECT 
+      l.*,
+
+      c.uuid AS customer_uuid,
+      CONCAT_WS(' ', c.firstName, c.middleName, c.lastName) AS fullName,
+      c.firstName,
+      c.middleName,
+      c.lastName,
+      c.customerPhone,
+      c.customerEmail,
+      c.companyName,
+      c.customerType,
+      c.customerCategoryType,
+      c.alternatePhone,
+      c.countryName,
+      c.customerCity,
+      c.address,
+      c.date_of_birth,
+      c.anniversary,
+      c.gender,
+      c.state,
+      c.pincode
+
+    FROM leads l
+    LEFT JOIN customers c ON l.customer_id = c.id
+    ${whereClause}
+    ORDER BY l.created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const queryValues = [...cityValues, limitNumber, offset];
+  const [leads] = await pool.query(query, queryValues);
+
+  // Count query
+  const countQuery = `
+    SELECT COUNT(*) as total 
+    FROM leads l
+    LEFT JOIN customers c ON l.customer_id = c.id
+    ${whereClause}
+  `;
+
+  const [countResult] = await pool.query(countQuery, cityValues);
+
+  return {
+    leads,
+    total: countResult[0].total,
+    page: pageNumber,
+    totalPages: Math.ceil(countResult[0].total / limitNumber),
+  };
 };
+
+// export const getLeads = async (page = 1, limit = 15) => {
+//   try {
+//     const pageNumber = parseInt(page, 10);
+//     const limitNumber = parseInt(limit, 10);
+
+//     if (isNaN(pageNumber) || pageNumber < 1) {
+//       throw new Error("Invalid page number");
+//     }
+//     if (isNaN(limitNumber) || limitNumber < 1) {
+//       throw new Error("Invalid limit number");
+//     }
+
+//     const offset = (pageNumber - 1) * limitNumber;
+
+//     const [rows] = await pool.execute(
+//       `SELECT
+//         l.*,
+
+//         c.uuid AS customer_uuid,
+
+//         -- ✅ Full Name
+//         CONCAT_WS(' ', c.firstName, c.middleName, c.lastName) AS fullName,
+
+//         c.firstName,
+//         c.middleName,
+//         c.lastName,
+
+//         c.customerPhone,
+//         c.customerEmail,
+//         c.companyName,
+//         c.customerType,
+//         c.customerCategoryType,
+//         c.alternatePhone,
+//         c.countryName,
+//         c.customerCity,
+//         c.address,
+//         c.date_of_birth,
+//         c.anniversary,
+//         c.gender,
+//         c.state,
+//         c.pincode
+
+//        FROM leads l
+//        LEFT JOIN customers c ON l.customer_id = c.id
+//        WHERE l.unwanted_status IS NULL
+//           OR l.unwanted_status != 'unwanted'
+//        ORDER BY l.created_at DESC
+//        LIMIT ${limitNumber} OFFSET ${offset}`,
+//     );
+
+//     const [totalRows] = await pool.execute(
+//       `SELECT COUNT(*) as count
+//        FROM leads l
+//        LEFT JOIN customers c ON l.customer_id = c.id
+//        WHERE l.unwanted_status IS NULL
+//           OR l.unwanted_status != 'unwanted'`,
+//     );
+
+//     const total = totalRows[0].count;
+
+//     return {
+//       leads: rows,
+//       total,
+//       page: pageNumber,
+//       totalPages: Math.ceil(total / limitNumber),
+//     };
+//   } catch (error) {
+//     console.error("getLeads error:", error);
+//     throw error;
+//   }
+// };
 
 export const updateLeadById = async (leadId, data) => {
   try {

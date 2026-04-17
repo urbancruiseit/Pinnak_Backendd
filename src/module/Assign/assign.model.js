@@ -1,104 +1,56 @@
-import { pool } from "../../config/mySqlDB.js";
+import { hrmsPool, pool } from "../../config/mySqlDB.js";
 
-// Assign lead to sales user
-export const assignLeadToUser = async (leadId, userId) => {
-  const sql = `
-    UPDATE leads 
-    SET assigned_to = ?, 
-        updated_at = CURRENT_TIMESTAMP 
-    WHERE id = ?
-  `;
-  
-  const [result] = await pool.execute(sql, [userId, leadId]);
-  return result.affectedRows > 0;
+export const findTravelAdvisorsByCityId = async (cityId) => {
+  if (!cityId) throw new Error("City ID is required");
+
+  try {
+    const [rows] = await hrmsPool.execute(
+      `SELECT 
+         u.id,
+         u.firstName,
+         u.middleName,
+         u.lastName
+       FROM users u
+       INNER JOIN roles r ON u.role_id = r.id
+       INNER JOIN sub_department sd ON u.subDepartment_id = sd.id
+       INNER JOIN access_control ac ON ac.employee_id = u.id
+       INNER JOIN access_control_cities acc ON acc.access_control_id = ac.id
+       WHERE acc.city_id = ?
+       AND LOWER(sd.subDepartment_name) = 'tele-sales'
+       AND LOWER(r.role_name) = 'travel advisor'
+       AND u.is_active = 1`,
+      [cityId],
+    );
+
+    return rows.map((user) => ({
+      id: user.id,
+      fullName: [user.firstName, user.middleName, user.lastName]
+        .filter(Boolean)
+        .join(" "),
+    }));
+  } catch (error) {
+    console.error("findTravelAdvisorsByCityId error:", error);
+    throw error;
+  }
 };
 
-// Get leads assigned to a specific user
-export const getLeadsByUser = async (userId) => {
-  const sql = `
-    SELECT 
-      l.*,
-      u.name as assigned_to_name,
-      u.email as assigned_to_email
-    FROM leads l
-    LEFT JOIN users u ON l.assigned_to = u.uuid
-    WHERE l.assigned_to = ?
-    ORDER BY l.created_at DESC
-  `;
-  
-  const [rows] = await pool.execute(sql, [userId]);
-  return rows;
-};
+export const assignTravelAdvisorToLead = async (leadId, travelAdvisorId) => {
+  if (!leadId) throw new Error("Lead ID is required");
+  if (!travelAdvisorId) throw new Error("Travel Advisor ID is required");
 
-// Get all leads with assignment details (for admin)
-export const getAllLeadsWithAssignments = async () => {
-  const sql = `
-    SELECT 
-      l.*,
-      u.name as assigned_to_name,
-      u.email as assigned_to_email,
-      u.role as assigned_to_role
-    FROM leads l
-    LEFT JOIN users u ON l.assigned_to = u.uuid
-    ORDER BY l.created_at DESC
-  `;
-  
-  const [rows] = await pool.execute(sql);
-  return rows;
-};
+  try {
+    const [result] = await pool.execute(
+      `UPDATE leads SET advisor_id = ? WHERE id = ?`,
+      [travelAdvisorId, leadId],
+    );
 
-// Remove assignment (set assigned_to to NULL)
-export const removeLeadAssignment = async (leadId) => {
-  const sql = `
-    UPDATE leads 
-    SET assigned_to = NULL, 
-        updated_at = CURRENT_TIMESTAMP 
-    WHERE id = ?
-  `;
-  
-  const [result] = await pool.execute(sql, [leadId]);
-  return result.affectedRows > 0;
-};
+    if (result.affectedRows === 0) {
+      throw new Error("Lead not found");
+    }
 
-// Get single lead with assignment details
-export const getLeadWithAssignment = async (leadId) => {
-  const sql = `
-    SELECT 
-      l.*,
-      u.name as assigned_to_name,
-      u.email as assigned_to_email
-    FROM leads l
-    LEFT JOIN users u ON l.assigned_to = u.uuid
-    WHERE l.id = ?
-  `;
-  
-  const [rows] = await pool.execute(sql, [leadId]);
-  return rows[0] || null;
+    return { success: true, leadId, travelAdvisorId };
+  } catch (error) {
+    console.error("assignTravelAdvisorToLead error:", error);
+    throw error;
+  }
 };
-
-// Check if lead is already assigned
-export const isLeadAssigned = async (leadId) => {
-  const sql = `
-    SELECT assigned_to FROM leads WHERE id = ?
-  `;
-  
-  const [rows] = await pool.execute(sql, [leadId]);
-  return rows[0]?.assigned_to !== null;
-};
-
-// Get assigned user details for a lead
-export const getAssignedUserDetails = async (leadId) => {
-  const sql = `
-    SELECT 
-      u.uuid,
-      u.name,
-      u.email,
-      u.role
-    FROM leads l
-    INNER JOIN users u ON l.assigned_to = u.uuid
-    WHERE l.id = ? AND l.assigned_to IS NOT NULL
-  `;
-  
-  const [rows] = await pool.execute(sql, [leadId]);
-  return rows[0] || null;
-}; 
