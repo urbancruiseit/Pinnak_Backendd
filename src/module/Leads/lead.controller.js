@@ -5,6 +5,7 @@ import {
   getLeads,
   insertLead,
   updateLeadById,
+  updateCustomerById,
   updateLeadUnwantedStatus,
   getAllUnwantedLeadsModel,
   createCustomers,
@@ -116,6 +117,49 @@ const createLeads = asyncHandler(async (req, res) => {
   );
 });
 
+const updateLeadByIdController = asyncHandler(async (req, res) => {
+  const id = req.params.id;
+  const updateData = req.body;
+
+  if (!id) {
+    throw new ApiError(400, null, "Lead ID is required");
+  }
+
+  // ── Customer fields alag karo ──────────────────────────────────────────
+  const customerFields = {
+    firstName: updateData.firstName,
+    middleName: updateData.middleName,
+    lastName: updateData.lastName,
+    customerPhone: updateData.customerPhone,
+    customerEmail: updateData.customerEmail,
+    companyName: updateData.companyName,
+    customerType: updateData.customerType,
+    customerCategoryType: updateData.customerCategoryType,
+    alternatePhone: updateData.alternatePhone,
+    countryName: updateData.countryName,
+    customerCity: updateData.customerCity,
+    customerState: updateData.customerState,
+    customerAddress: updateData.customerAddress,
+  };
+
+  // ── Lead fields se customer fields remove karo ─────────────────────────
+  const leadFields = { ...updateData };
+  Object.keys(customerFields).forEach((k) => delete leadFields[k]);
+  delete leadFields.customer_id;
+
+  // ── Customer table update karo ─────────────────────────────────────────
+  if (updateData.customer_id) {
+    await updateCustomerById(updateData.customer_id, customerFields);
+  }
+
+  // ── Lead table update karo ─────────────────────────────────────────────
+  const updatedLead = await updateLeadById(id, leadFields);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedLead, "Lead updated successfully"));
+});
+
 const listLeads = asyncHandler(async (req, res) => {
   const user = req.user;
   const userCityIds = user.city_ids || [];
@@ -128,21 +172,6 @@ const listLeads = asyncHandler(async (req, res) => {
   res
     .status(200)
     .json(new ApiResponse(200, leadsData, "Leads fetched successfully"));
-});
-
-const updateLeadByIdController = asyncHandler(async (req, res) => {
-  const id = req.params.id;
-  const updateData = req.body;
-
-  if (!id) {
-    throw new ApiError(400, null, "Lead ID is required");
-  }
-
-  const updatedUser = await updateLeadById(id, updateData);
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, updatedUser, "User updated successfully"));
 });
 
 const updateLeadUnwantedStatusController = asyncHandler(async (req, res) => {

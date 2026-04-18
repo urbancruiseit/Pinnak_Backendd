@@ -54,3 +54,50 @@ export const assignTravelAdvisorToLead = async (leadId, travelAdvisorId) => {
     throw error;
   }
 };
+
+export const getLeadsByAdvisorId = async (advisorId, limit, offset) => {
+  try {
+    const [rows] = await pool.query(
+      `
+      SELECT 
+        l.*,
+        c.uuid AS customer_uuid,
+        CONCAT_WS(' ', c.firstName, c.middleName, c.lastName) AS fullName,
+        c.firstName,
+        c.middleName,
+        c.lastName,
+        c.customerPhone,
+        c.customerEmail,
+        c.companyName,
+        c.customerType,
+        c.customerCategoryType,
+        c.alternatePhone,
+        c.countryName,
+        c.customerCity,
+        c.address,
+        c.date_of_birth,
+        c.anniversary,
+        c.gender,
+        c.state,
+        c.pincode
+      FROM leads l
+      LEFT JOIN customers c ON l.customer_id = c.id
+     
+      WHERE l.advisor_id = ?
+      ORDER BY l.id DESC
+      LIMIT ? OFFSET ?
+      `,
+      [Number(advisorId), Number(limit), Number(offset)],
+    );
+
+    const [[{ totalCount }]] = await pool.query(
+      `SELECT COUNT(*) AS totalCount FROM leads WHERE advisor_id = ?`,
+      [Number(advisorId)],
+    );
+
+    return { leads: rows, totalCount: Number(totalCount) };
+  } catch (error) {
+    console.error("getLeadsByAdvisorId error:", error);
+    throw error;
+  }
+};

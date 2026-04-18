@@ -386,77 +386,7 @@ export const getLeads = async (page, limit, cityIds) => {
   };
 };
 
-// export const getLeads = async (page = 1, limit = 15) => {
-//   try {
-//     const pageNumber = parseInt(page, 10);
-//     const limitNumber = parseInt(limit, 10);
 
-//     if (isNaN(pageNumber) || pageNumber < 1) {
-//       throw new Error("Invalid page number");
-//     }
-//     if (isNaN(limitNumber) || limitNumber < 1) {
-//       throw new Error("Invalid limit number");
-//     }
-
-//     const offset = (pageNumber - 1) * limitNumber;
-
-//     const [rows] = await pool.execute(
-//       `SELECT
-//         l.*,
-
-//         c.uuid AS customer_uuid,
-
-//         -- ✅ Full Name
-//         CONCAT_WS(' ', c.firstName, c.middleName, c.lastName) AS fullName,
-
-//         c.firstName,
-//         c.middleName,
-//         c.lastName,
-
-//         c.customerPhone,
-//         c.customerEmail,
-//         c.companyName,
-//         c.customerType,
-//         c.customerCategoryType,
-//         c.alternatePhone,
-//         c.countryName,
-//         c.customerCity,
-//         c.address,
-//         c.date_of_birth,
-//         c.anniversary,
-//         c.gender,
-//         c.state,
-//         c.pincode
-
-//        FROM leads l
-//        LEFT JOIN customers c ON l.customer_id = c.id
-//        WHERE l.unwanted_status IS NULL
-//           OR l.unwanted_status != 'unwanted'
-//        ORDER BY l.created_at DESC
-//        LIMIT ${limitNumber} OFFSET ${offset}`,
-//     );
-
-//     const [totalRows] = await pool.execute(
-//       `SELECT COUNT(*) as count
-//        FROM leads l
-//        LEFT JOIN customers c ON l.customer_id = c.id
-//        WHERE l.unwanted_status IS NULL
-//           OR l.unwanted_status != 'unwanted'`,
-//     );
-
-//     const total = totalRows[0].count;
-
-//     return {
-//       leads: rows,
-//       total,
-//       page: pageNumber,
-//       totalPages: Math.ceil(total / limitNumber),
-//     };
-//   } catch (error) {
-//     console.error("getLeads error:", error);
-//     throw error;
-//   }
-// };
 
 export const updateLeadById = async (leadId, data) => {
   try {
@@ -576,6 +506,57 @@ export const getAllUnwantedLeadsModel = async () => {
     return rows;
   } catch (error) {
     console.error("getAllUnwantedLeadsModel error:", error);
+    throw error;
+  }
+};
+
+export const updateCustomerById = async (
+  customerId,
+  data,
+  connection = pool, // transaction support
+) => {
+  if (!customerId) {
+    throw new Error("Customer ID is required");
+  }
+
+  // ✅ Clean data (undefined, null, "" remove)
+  const fields = Object.entries(data).filter(
+    ([_, v]) => v !== undefined && v !== null && v !== "",
+  );
+
+  if (fields.length === 0) {
+    return {
+      success: false,
+      message: "No valid fields to update",
+    };
+  }
+
+  // ✅ Dynamic query build
+  const setClause = fields.map(([key]) => `${key} = ?`).join(", ");
+  const values = fields.map(([_, value]) => value);
+
+  try {
+    const [result] = await connection.query(
+      `UPDATE customers SET ${setClause} WHERE id = ?`,
+      [...values, customerId],
+    );
+
+    // ❌ Customer not found
+    if (result.affectedRows === 0) {
+      throw new Error("Customer not found");
+    }
+
+    return {
+      success: true,
+      affectedRows: result.affectedRows,
+      changedRows: result.changedRows,
+      message:
+        result.changedRows === 0
+          ? "No changes made (same data)"
+          : "Customer updated successfully",
+    };
+  } catch (error) {
+    console.error("Update Customer Error:", error);
     throw error;
   }
 };
